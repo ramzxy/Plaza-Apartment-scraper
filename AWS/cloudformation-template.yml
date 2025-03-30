@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Plaza apartment scraper Lambda function'
+
+Parameters:
+  DiscordWebhookUrl:
+    Type: String
+    Description: URL for the Discord webhook
+    NoEcho: true
+
+Resources:
+  PlazaScraperBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'plaza-scraper-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+
+  PlazaScraperLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${PlazaScraperBucket}/*'
+
+  PlazaScraperFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: plaza-scraper-function
+      Runtime: python3.9
+      Handler: lambda_scraper.lambda_handler
+      Role: !GetAtt PlazaScraperLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          DISCORD_WEBHOOK_URL: !Ref DiscordWebhookUrl
+          S3_BUCKET_NAME: !Ref PlazaScraperBucket
+      Code:
+        ZipFile: |
+          # This is a placeholder. You'll upload your actual Lambda code as a package.
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': 'Placeholder - Deploy actual code package'}
+
+  PlazaScraperScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: plaza-scraper-schedule
+      Description: 'Run Plaza scraper every 5 minutes'
+      ScheduleExpression: 'rate(5 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PlazaScraperFunction.Arn
+          Id: PlazaScraperTarget
+
+  PlazaScraperSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PlazaScraperFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt PlazaScraperScheduleRule.Arn
+
+Outputs:
+  PlazaScraperFunctionArn:
+    Description: ARN of the Plaza scraper Lambda function
+    Value: !GetAtt PlazaScraperFunction.Arn
+  
+  PlazaScraperBucketName:
+    Description: Name of the S3 bucket for storing scraper state
+    Value: !Ref PlazaScraperBucket 

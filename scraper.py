@@ -95,20 +95,6 @@ async def get_listings(debug=False):
                     items = data['data']
                     print(f"API returned {len(items)} items")
                     
-                    # Dump a sample item for debugging if available
-                    if items and debug:
-                        try:
-                            sample_item = items[0]
-                            print(f"Sample item keys: {sample_item.keys()}")
-                            print(f"Sample street: {sample_item.get('street')}")
-                            print(f"Sample houseNumber: {sample_item.get('houseNumber')}")
-                            print(f"Sample city: {sample_item.get('city', {}).get('name', '')}")
-                            print(f"Sample postalcode: {sample_item.get('postalcode')}")
-                            print(f"Sample totalRent: {sample_item.get('totalRent')}")
-                            print(f"Sample areaDwelling: {sample_item.get('areaDwelling')}")
-                        except Exception as e:
-                            print(f"Error printing sample item: {e}")
-                    
                     # Process each listing
                     for item in items:
                         try:

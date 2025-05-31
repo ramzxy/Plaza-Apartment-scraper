@@ -3,7 +3,7 @@ module.exports = {
     name: 'plaza-scraper',
     script: 'scraper.py',
     interpreter: 'python3',
-    cwd: '/path/to/your/scraper', // Update this to your actual VPS path
+    cwd: '/home/ubuntu/scraper', // Update this to your actual VPS path
     instances: 1,
     autorestart: true,
     watch: false,

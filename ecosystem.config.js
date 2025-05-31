@@ -1,9 +1,8 @@
 module.exports = {
   apps: [{
     name: 'plaza-scraper',
-    script: 'scraper.py',
-    interpreter: 'python3',
-    cwd: '/home/ubuntu/scraper', // Update this to your actual VPS path
+    script: './run_scraper.sh',
+    cwd: '/home/ubuntu/Plaza-Apartment-scraper',
     instances: 1,
     autorestart: true,
     watch: false,

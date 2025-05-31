@@ -1,1 +1,37 @@
-/.env
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# PM2 files
+.pm2/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scraper data
+seen_listings.json

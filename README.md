@@ -1,13 +1,13 @@
 # Plaza Apartment Scraper
 
-A lightweight scraper for monitoring new apartment listings on Plaza and sending Discord notifications.
+A lightweight scraper for monitoring new apartment listings on Plaza and sending Discord and/or Telegram notifications.
 
 ## Features
 
 - Monitors available apartments in Enschede from Plaza website
 - Uses direct API integration with exact filter payload matching the website
 - Makes POST requests with the precise filters used by the website itself
-- Sends Discord notifications for new listings
+- Sends Discord and/or Telegram notifications for new listings
 - Runs in a lightweight manner, suitable for VPS deployment
 
 ## How It Works
@@ -25,10 +25,22 @@ The scraper makes a direct POST request to the Plaza API with specific filter pa
    ```
    pip install -r requirements.txt
    ```
-3. Create a `.env` file in the project directory with your Discord webhook URL:
+3. Create a `.env` file in the project directory with your notification settings (Discord, Telegram, or both):
    ```
-   DISCORD_WEBHOOK_URL=your_discord_webhook_url_here
+   # Discord (optional)
+   PLAZA_WEBHOOK_URL=your_plaza_discord_webhook_url_here
+   ROOMSPOT_WEBHOOK_URL=your_roomspot_discord_webhook_url_here
+
+   # Telegram (optional)
+   TELEGRAM_BOT_TOKEN=123456789:your_bot_token_here
+   TELEGRAM_CHAT_ID=your_chat_id_here
    ```
+
+### Telegram setup
+
+1. Open a chat with [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the bot token into `TELEGRAM_BOT_TOKEN`.
+2. Send any message to your new bot (or add it to a group).
+3. Open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `message.chat.id` into `TELEGRAM_CHAT_ID`.
 
 ## Usage
 
@@ -38,7 +50,7 @@ Run the scraper:
 python scraper.py
 ```
 
-The scraper will check for new listings every 5 minutes and send notifications via Discord.
+The scraper will check for new listings every 5 minutes and send notifications via Discord and/or Telegram.
 
 ## Running in the Background
 

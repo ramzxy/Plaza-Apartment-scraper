@@ -10,6 +10,7 @@ import asyncio
 import re
 import traceback
 import urllib.parse
+import html
 
 # Load environment variables
 load_dotenv()
@@ -20,6 +21,11 @@ CHECK_INTERVAL = 1500  # 5 minutes
 # Discord webhook URLs
 PLAZA_WEBHOOK_URL = os.getenv('PLAZA_WEBHOOK_URL')
 ROOMSPOT_WEBHOOK_URL = os.getenv('ROOMSPOT_WEBHOOK_URL')
+
+# Telegram bot settings
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+TELEGRAM_ENABLED = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 # Scraper configurations
 SCRAPERS = {
@@ -419,6 +425,72 @@ async def send_discord_notification(listing, webhook_url, source_config):
     except Exception as e:
         print(f"❌ Error sending {source_config['name']} notification: {e}")
 
+async def send_telegram_notification(listing, source_config):
+    """Send a notification to Telegram about a new listing."""
+    if not TELEGRAM_ENABLED:
+        return
+
+    lines = [
+        f"{source_config['emoji']} <b>New {html.escape(source_config['name'])} Listing!</b>",
+        "",
+        f"<b>{html.escape(listing['title'])}</b>",
+        f"💶 Price: {html.escape(listing['price'])}",
+        f"📐 Area: {html.escape(listing['area'])}",
+        f"🏷 Property Type: {html.escape(listing['property_type'])}",
+    ]
+    if listing.get('floor'):
+        lines.append(f"🪜 Floor: {html.escape(listing['floor'])}")
+    if listing.get('house_type'):
+        lines.append(f"🏘 House Type: {html.escape(listing['house_type'])}")
+    lines.append("")
+    lines.append(f'<a href="{html.escape(listing["link"])}">View listing</a>')
+    text = "\n".join(lines)
+
+    api_base = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Try sending with the photo first; fall back to a text message if that fails
+            if listing['img_url']:
+                async with session.post(f"{api_base}/sendPhoto", json={
+                    'chat_id': TELEGRAM_CHAT_ID,
+                    'photo': listing['img_url'],
+                    'caption': text,
+                    'parse_mode': 'HTML'
+                }) as response:
+                    if response.status == 200:
+                        print(f"✅ Sent {source_config['name']} Telegram notification for: {listing['title']}")
+                        return
+                    print(f"⚠️  Telegram sendPhoto failed ({response.status}): {await response.text()}")
+
+            async with session.post(f"{api_base}/sendMessage", json={
+                'chat_id': TELEGRAM_CHAT_ID,
+                'text': text,
+                'parse_mode': 'HTML'
+            }) as response:
+                if response.status == 200:
+                    print(f"✅ Sent {source_config['name']} Telegram notification for: {listing['title']}")
+                else:
+                    print(f"❌ Telegram sendMessage failed ({response.status}): {await response.text()}")
+    except Exception as e:
+        print(f"❌ Error sending {source_config['name']} Telegram notification: {e}")
+
+async def send_telegram_status(text):
+    """Send a plain status message to Telegram (e.g. when a check finds nothing new)."""
+    if not TELEGRAM_ENABLED:
+        return
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", json={
+                'chat_id': TELEGRAM_CHAT_ID,
+                'text': text
+            }) as response:
+                if response.status != 200:
+                    print(f"❌ Telegram status message failed ({response.status}): {await response.text()}")
+    except Exception as e:
+        print(f"❌ Error sending Telegram status message: {e}")
+
 def load_seen_listings(filename):
     """Load previously seen listings from a JSON file."""
     try:
@@ -434,8 +506,8 @@ def save_seen_listings(listings, filename):
 
 async def process_scraper(scraper_name, scraper_config):
     """Process a single scraper."""
-    if not scraper_config['webhook_url']:
-        print(f"⚠️  Skipping {scraper_name} - no webhook URL configured")
+    if not scraper_config['webhook_url'] and not TELEGRAM_ENABLED:
+        print(f"⚠️  Skipping {scraper_name} - no notification channel configured")
         return
     
     print(f"\n🔍 Processing {scraper_config['name']} scraper...")
@@ -454,6 +526,10 @@ async def process_scraper(scraper_name, scraper_config):
     
     if not current_listings:
         print(f"No {scraper_config['name']} listings found")
+        await send_telegram_status(
+            f"{scraper_config['emoji']} {scraper_config['name']}: no listings found "
+            f"(checked at {time.strftime('%H:%M')})"
+        )
         return
     
     # Check for new listings
@@ -467,10 +543,18 @@ async def process_scraper(scraper_name, scraper_config):
             print(f"👀 Known {scraper_config['name']} listing: {listing['title']}")
     
     print(f"📊 {scraper_config['name']}: {len(new_listings)} new listings out of {len(current_listings)} total")
-    
+
+    if not new_listings:
+        await send_telegram_status(
+            f"{scraper_config['emoji']} {scraper_config['name']}: nothing new "
+            f"({len(current_listings)} listings, checked at {time.strftime('%H:%M')})"
+        )
+
     # Send notifications for new listings
     for listing in new_listings:
-        await send_discord_notification(listing, scraper_config['webhook_url'], scraper_config)
+        if scraper_config['webhook_url']:
+            await send_discord_notification(listing, scraper_config['webhook_url'], scraper_config)
+        await send_telegram_notification(listing, scraper_config)
     
     # Save updated seen listings
     save_seen_listings(seen_listings, scraper_config['seen_file'])
@@ -481,16 +565,22 @@ async def main():
     print(f"📅 Check interval: {CHECK_INTERVAL} seconds")
     
     # Check which scrapers are enabled
+    if TELEGRAM_ENABLED:
+        print("✅ Telegram notifications enabled")
+    else:
+        print("⚠️  Telegram notifications disabled (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
+
     enabled_scrapers = []
     for name, config in SCRAPERS.items():
-        if config['webhook_url']:
+        if config['webhook_url'] or TELEGRAM_ENABLED:
             enabled_scrapers.append(name)
-            print(f"✅ {config['name']} scraper enabled")
+            channels = [c for c, on in (('Discord', config['webhook_url']), ('Telegram', TELEGRAM_ENABLED)) if on]
+            print(f"✅ {config['name']} scraper enabled ({', '.join(channels)})")
         else:
-            print(f"⚠️  {config['name']} scraper disabled (no webhook URL)")
+            print(f"⚠️  {config['name']} scraper disabled (no Discord webhook or Telegram configured)")
     
     if not enabled_scrapers:
-        print("❌ No scrapers enabled! Please configure webhook URLs in your .env file")
+        print("❌ No scrapers enabled! Please configure Discord webhook URLs or Telegram settings in your .env file")
         return
     
     while True:
